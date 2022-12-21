@@ -1,0 +1,144 @@
+import pytest
+
+from selenium import webdriver
+from selenium.common.exceptions import TimeoutException
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+
+
+@pytest.fixture(autouse=True)
+def testing():
+    pytest.driver = webdriver.Chrome('/usr/local/bin/chromedriver.exe')
+
+    pytest.driver.get('https://petfriends.skillfactory.ru/login')
+
+    yield
+
+    pytest.driver.quit()
+
+
+def test_card_pets():
+    pytest.driver.find_element_by_id('email').send_keys('qwertyasd@mail.ru')
+    pytest.driver.find_element_by_id('pass').send_keys('12345')
+    pytest.driver.find_element_by_css_selector('button[type="submit"]').click()
+    assert pytest.driver.find_element_by_tag_name('h1').text == "PetFriends"
+
+    try:
+        pytest.driver.implicitly_wait(15)
+        card_element_wait = pytest.driver.find_element_by_css_selector(".card-deck")  # неявное ожидание
+        card_element_wait
+    except TimeoutException:
+        print("время ожидания загрузки карточек вышло")
+        pytest.driver.quit()
+
+    images = pytest.driver.find_elements_by_css_selector('.card-deck .card-img-top')
+    names = pytest.driver.find_elements_by_css_selector('.card-deck .card-title')
+    descriptions = pytest.driver.find_elements_by_css_selector('.card-deck .card-text')
+
+    for i in range(len(names)):
+        assert images[i].get_attribute('src') != ''
+        assert names[i].text != ''
+        assert descriptions[i].text != ''
+        assert ',' in descriptions[i].text
+        parts = descriptions[i].text.split(",")
+        assert len(parts[0]) > 0
+        assert len(parts[1]) > 0
+
+
+def test_show_my_pets():
+    pytest.driver.find_element_by_id('email').send_keys('qwertyasd@mail.ru')
+    pytest.driver.find_element_by_id('pass').send_keys('12345')
+    pytest.driver.find_element_by_css_selector('button[type="submit"]').click()
+    pytest.driver.implicitly_wait(3)
+    btn_my_pets = pytest.driver.find_element_by_link_text('Мои питомцы')
+    btn_my_pets.click()
+    assert pytest.driver.find_element_by_tag_name('h2').text == "ruslan713"
+
+    element = WebDriverWait(pytest.driver, 10).until(
+        EC.presence_of_element_located((By.CSS_SELECTOR, ".\\.col-sm-4.left")))
+
+    statistic = pytest.driver.find_elements_by_css_selector(".\\.col-sm-4.left")
+
+    element = WebDriverWait(pytest.driver, 10).until(
+        EC.presence_of_element_located((By.CSS_SELECTOR, ".table.table-hover tbody tr")))
+
+    pets = pytest.driver.find_elements_by_css_selector('.table.table-hover tbody tr')
+
+    number = statistic[0].text.split('\n')
+    number = number[1].split(' ')
+    number = int(number[1])
+
+    number_of_pets = len(pets)
+
+    element = WebDriverWait(pytest.driver, 15).until(
+        EC.presence_of_element_located((By.CSS_SELECTOR, ".table.table-hover img")))
+
+    images = pytest.driver.find_elements_by_css_selector('.table.table-hover img')
+
+
+    element = WebDriverWait(pytest.driver, 15).until(EC.presence_of_element_located(
+        (By.XPATH, '//tbody/tr/td[1]')))
+    pet_names = pytest.driver.find_elements_by_xpath('//*[@id="all_my_pets"]//td[1]')  # имена
+    pet_species = pytest.driver.find_elements_by_xpath('//*[@id="all_my_pets"]//td[2]')  # порода
+    pet_ages = pytest.driver.find_elements_by_xpath('//*[@id="all_my_pets"]//td[3]')  # возраст
+    pet_count = len(pet_names)
+    names = []
+    print('\n')
+    print('Всего на странице питомцев: ', pet_count)
+    for l in pet_names:
+        names.append(l.text)
+    for i in range(pet_count - 1):
+        try:
+            assert names.count(pet_names[i].text) <= 1
+        except:
+            print('Имя  "', pet_names[i].text, '"  среди моих питомцев встречается', names.count(pet_names[i].text),
+                  'раз/a')
+            names = list(filter(lambda x: x != pet_names[i].text, names))
+        for j in range(i + 1, pet_count):
+            if pet_names[i].text == pet_names[j].text:
+                if pet_species[i].text == pet_species[j].text:
+                    try:
+                        assert pet_ages[i].text != pet_ages[j].text
+                    except:
+                        print("Есть дубликаты питомцев с номерами: ", i + 1, j + 1)
+
+    assert number == number_of_pets
+
+    img_no_photo = 0
+    pet_no_name = 0
+    pet_no_species = 0
+    pet_no_ages = 0
+    for i in range(pet_count):
+        try:
+            assert images[i].get_attribute('src') != ''
+        except:
+            img_no_photo += 1
+        try:
+            assert pet_names[i].text != ''
+        except:
+            pet_no_name += 1
+        try:
+            assert pet_species[i].text != ''
+        except:
+            pet_no_species += 1
+        try:
+            assert pet_ages[i].text != ''
+        except:
+            pet_no_ages += 1
+
+
+    if img_no_photo > round(pet_count / 2):
+        photo_text = 'больше половины'
+    else:
+        photo_text = 'меньше половины'
+
+    print('Моих питомцев без фото', photo_text, '-', img_no_photo, 'из', pet_count)
+    print('Моих питомцев без имени: ', pet_no_name)
+    print('Моих питомцев без породы: ', pet_no_species)
+    print('Моих питомцев без возраста: ', pet_no_ages)
+
+
+
+if __name__ == '__main__':
+    pass
